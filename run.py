@@ -28,7 +28,10 @@ def parse_recipe(recipe_url: str):
         })
     
     # Instructions
-    instructions = soup.find(property="schema:recipeInstructions").text
+    try:
+        instructions = soup.find(property="schema:recipeInstructions").text
+    except:
+        instructions = soup.find(class_='cocktail-book-comment').text
 
     # History
     #TODO
@@ -39,12 +42,16 @@ def parse_recipe(recipe_url: str):
         similar_cocktails.update({
             s.text: f"{main_url}{s.get('href')}"
         })
-
+    
     # Summary (needs more work)
-    summary = soup.find(class_="col-xs-12 col-sm-4 pull-right").find(class_='panel-body')  
-    key_ = [x.text.lower() for x in summary.find_all(class_='field--label')]
-    value_ = [x.text for x in summary.find_all(class_='field--item')]
-    about = dict(zip(key_, value_))
+    summary_items = soup.find(class_="panel-body").find_all(class_='field--label-inline')
+    summary = {x.find(class_='field--label').text: x.find(class_='field--item').text for x in summary_items}
+    
+    # Pull out posted on
+    summary.update({
+        'posted_on': soup.find(class_="panel-body").find('footer').find_all('span')[-1].text
+        })
+
     
     recipe = {
         'name': name,
@@ -52,7 +59,7 @@ def parse_recipe(recipe_url: str):
         'ingredients': '\n'.join([f"{v} {k}" for k, v in ingredients.items()]),
         'instructions': instructions,
         'similar_cocktails': '\n'.join([f"{k}: {v}" for k, v in similar_cocktails.items()]),
-        **about 
+        **summary 
     }
 
     return recipe
@@ -91,12 +98,21 @@ if __name__ == '__main__':
     
     all_recipes = list()
     # Paginate through all the recipes
-    for p in range(3):
+    for p in range(MAX_PAGES):
         print(f"page={p}")
         format_str = f"{landing_page}&page={p}"
         all_recipes.extend(get_html_page(format_str))
 
     df = format_df(all_recipes)
+    
+    df = df.rename(columns={
+        'Year': 'year',
+        'Curator': 'curator',
+        'Average': 'average_rating',
+        'Is an': 'is_an',
+        'Reference': 'reference',
+        'is_of': 'is_of'
+        })
 
     df.to_csv('recipes.csv', index=False)
     
